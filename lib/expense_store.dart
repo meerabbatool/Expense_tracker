@@ -40,20 +40,16 @@ class Expense {
   );
 }
 
-/// Shared store for expenses, used by both the Add Expense screen (writes)
-/// and the History/Dashboard screens (read/listen).
-///
-/// Expenses are kept in memory for fast access, and mirrored to local
-/// on-device storage (via `shared_preferences`) so they survive an app
-/// restart. Call [ExpenseStore.instance.load] once, early in `main()`,
-/// before `runApp`.
+/// Shared store for expenses.
 class ExpenseStore extends ChangeNotifier {
   ExpenseStore._internal();
+
   static final ExpenseStore instance = ExpenseStore._internal();
 
   static const String _storageKey = 'khata_expenses';
 
   final List<Expense> _expenses = [];
+
   bool _loaded = false;
 
   /// Newest first.
@@ -65,15 +61,18 @@ class ExpenseStore extends ChangeNotifier {
 
   bool get isLoaded => _loaded;
 
-  /// Loads any previously saved expenses from disk. Safe to call multiple
-  /// times — it only reads once.
+  /// Load saved expenses from local storage.
   Future<void> load() async {
     if (_loaded) return;
+
     try {
       final prefs = await SharedPreferences.getInstance();
+
       final String? raw = prefs.getString(_storageKey);
+
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+
         _expenses
           ..clear()
           ..addAll(
@@ -81,39 +80,80 @@ class ExpenseStore extends ChangeNotifier {
           );
       }
     } catch (_) {
-      // If anything is corrupted/unreadable, just start with an empty list
-      // rather than crashing the app on launch.
+      // If storage is corrupted/unreadable,
+      // start with an empty list instead of crashing.
     }
+
     _loaded = true;
+
     notifyListeners();
   }
 
+  /// Save current list to local storage.
   Future<void> _persist() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
       final String raw = jsonEncode(_expenses.map((e) => e.toJson()).toList());
+
       await prefs.setString(_storageKey, raw);
     } catch (_) {
-      // Best-effort — if saving fails, the in-memory state is still correct
-      // for the rest of this session.
+      // Best effort.
     }
   }
 
+  /// Add a new expense.
   void add(Expense expense) {
     _expenses.insert(0, expense);
+
     notifyListeners();
+
     _persist();
   }
 
+  /// Update an existing expense using its ID.
+  void update(Expense updatedExpense) {
+    final int index = _expenses.indexWhere(
+      (expense) => expense.id == updatedExpense.id,
+    );
+
+    if (index == -1) return;
+
+    _expenses[index] = updatedExpense;
+
+    notifyListeners();
+
+    _persist();
+  }
+
+  /// Delete an expense using its ID.
+  void removeById(String id) {
+    _expenses.removeWhere((expense) => expense.id == id);
+
+    notifyListeners();
+
+    _persist();
+  }
+
+  /// Delete an expense using its list index.
+  ///
+  /// Kept for compatibility with any existing code.
   void removeAt(int index) {
+    if (index < 0 || index >= _expenses.length) return;
+
     _expenses.removeAt(index);
+
     notifyListeners();
+
     _persist();
   }
 
+  /// Clear all expenses.
   void clear() {
     _expenses.clear();
+
     notifyListeners();
+
     _persist();
   }
 }

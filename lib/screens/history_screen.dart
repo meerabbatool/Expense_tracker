@@ -13,8 +13,9 @@ class ExpenseHistoryScreen extends StatefulWidget {
 }
 
 class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
-  int _selectedTab = 2; // History active
+  int _selectedTab = 2;
   int _selectedCategory = 0;
+
   final TextEditingController _searchController = TextEditingController();
 
   static const Color bg = Color(0xFFF7F1E7);
@@ -39,14 +40,18 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    // Rebuild the list live as the user types in the search box, and
-    // whenever the store changes (a new expense gets saved elsewhere).
-    _searchController.addListener(() => setState(() {}));
+
+    _searchController.addListener(() {
+      setState(() {});
+    });
+
     ExpenseStore.instance.addListener(_onStoreChanged);
   }
 
   void _onStoreChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -58,17 +63,99 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
 
   List<Expense> get _filteredExpenses {
     final String query = _searchController.text.trim().toLowerCase();
+
     final String? categoryFilter = _selectedCategory == 0
         ? null
         : _categories[_selectedCategory].label;
 
     return ExpenseStore.instance.expenses.where((e) {
-      final matchesCategory =
+      final bool matchesCategory =
           categoryFilter == null || e.category == categoryFilter;
-      final matchesQuery =
+
+      final bool matchesQuery =
           query.isEmpty || e.title.toLowerCase().contains(query);
+
       return matchesCategory && matchesQuery;
     }).toList();
+  }
+
+  /// Opens the Add Expense screen in EDIT mode.
+  void _editExpense(Expense expense) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => AddExpenseScreen(expense: expense)),
+    );
+  }
+
+  /// Shows confirmation before deleting.
+  Future<void> _deleteExpense(Expense expense) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: cardBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text(
+            'Delete expense?',
+            style: TextStyle(
+              color: textDark,
+              fontSize: 21,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'serif',
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete "${expense.title}"? '
+            'This action cannot be undone.',
+            style: const TextStyle(color: textGrey, fontSize: 14, height: 1.4),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: textDark, fontWeight: FontWeight.w700),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: coral,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text(
+                'Delete',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      ExpenseStore.instance.removeById(expense.id);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"${expense.title}" deleted.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -140,8 +227,11 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 24),
+
                   Divider(color: outline.withOpacity(0.6), height: 1),
+
                   const SizedBox(height: 24),
 
                   // ---- Heading ----
@@ -185,6 +275,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 24),
 
                   // ---- Search + filters card ----
@@ -211,7 +302,11 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.search, color: textGrey, size: 20),
+                              const Icon(
+                                Icons.search,
+                                color: textGrey,
+                                size: 20,
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: TextField(
@@ -228,6 +323,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                             ],
                           ),
                         ),
+
                         const SizedBox(height: 16),
 
                         // Category chips
@@ -236,28 +332,36 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                           child: Row(
                             children: List.generate(_categories.length, (i) {
                               final bool selected = _selectedCategory == i;
+
                               final cat = _categories[i];
+
                               return Padding(
                                 padding: const EdgeInsets.only(right: 10),
                                 child: _CategoryChip(
                                   label: cat.label,
                                   icon: cat.icon,
                                   selected: selected,
-                                  onTap: () =>
-                                      setState(() => _selectedCategory = i),
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedCategory = i;
+                                    });
+                                  },
                                 ),
                               );
                             }),
                           ),
                         ),
+
                         const SizedBox(height: 16),
+
                         Divider(color: outline.withOpacity(0.6), height: 1),
+
                         const SizedBox(height: 14),
 
-                        // Month filter + results count
+                        // Month filter
                         Row(
                           children: [
-                            Text(
+                            const Text(
                               'Month',
                               style: TextStyle(color: textGrey, fontSize: 14),
                             ),
@@ -272,7 +376,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(color: outline),
                               ),
-                              child: Row(
+                              child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
@@ -282,7 +386,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                                       fontSize: 13,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
+                                  SizedBox(width: 6),
                                   Icon(
                                     Icons.keyboard_arrow_down_rounded,
                                     size: 18,
@@ -294,25 +398,29 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                             const Spacer(),
                             Text(
                               '${_filteredExpenses.length} results',
-                              style: TextStyle(color: textGrey, fontSize: 13),
+                              style: const TextStyle(
+                                color: textGrey,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 18),
 
-                  // ---- Total card (olive) ----
+                  // ---- Total card ----
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 20,
                     ),
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: olive,
-                      borderRadius: const BorderRadius.only(
+                      borderRadius: BorderRadius.only(
                         topLeft: Radius.circular(24),
                         topRight: Radius.circular(24),
                       ),
@@ -337,7 +445,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                               Text(
                                 'PKR ${ExpenseStore.instance.totalAmount.toStringAsFixed(2)}',
                                 style: const TextStyle(
-                                  color: Color(0xFF1E1B18),
+                                  color: textDark,
                                   fontSize: 26,
                                   fontWeight: FontWeight.w800,
                                   fontFamily: 'serif',
@@ -361,13 +469,13 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                               const Icon(
                                 Icons.filter_list_rounded,
                                 size: 16,
-                                color: Color(0xFF1E1B18),
+                                color: textDark,
                               ),
                               const SizedBox(width: 6),
                               Text(
                                 '${_filteredExpenses.length} of ${ExpenseStore.instance.count} shown',
                                 style: const TextStyle(
-                                  color: Color(0xFF1E1B18),
+                                  color: textDark,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -379,7 +487,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                     ),
                   ),
 
-                  // ---- Expense list / empty state (dashed bottom) ----
+                  // ---- Expense list ----
                   CustomPaint(
                     painter: _DashedBottomRRectPainter(
                       color: outline,
@@ -387,9 +495,9 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                     ),
                     child: Container(
                       width: double.infinity,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: cardBg,
-                        borderRadius: const BorderRadius.only(
+                        borderRadius: BorderRadius.only(
                           bottomLeft: Radius.circular(24),
                           bottomRight: Radius.circular(24),
                         ),
@@ -409,7 +517,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                                       color: coralSoft,
                                       borderRadius: BorderRadius.circular(20),
                                     ),
-                                    child: Center(
+                                    child: const Center(
                                       child: Icon(
                                         Icons.inbox_rounded,
                                         size: 30,
@@ -429,8 +537,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                                   ),
                                   const SizedBox(height: 10),
                                   Text(
-                                    'Once you start logging expenses they will all show up here, '
-                                    'ready to search and filter.',
+                                    'Once you start logging expenses they will all show up here, ready to search and filter.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: textGrey.withOpacity(0.9),
@@ -463,13 +570,13 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                               ),
                               child: Column(
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     Icons.search_off_rounded,
                                     size: 30,
                                     color: textGrey,
                                   ),
                                   const SizedBox(height: 14),
-                                  Text(
+                                  const Text(
                                     'No matching expenses',
                                     style: TextStyle(
                                       color: textDark,
@@ -478,7 +585,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Text(
+                                  const Text(
                                     'Try a different search term or category.',
                                     style: TextStyle(
                                       color: textGrey,
@@ -492,12 +599,16 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                               children: List.generate(
                                 _filteredExpenses.length,
                                 (i) {
-                                  final e = _filteredExpenses[i];
+                                  final Expense e = _filteredExpenses[i];
+
                                   final bool isLast =
                                       i == _filteredExpenses.length - 1;
+
                                   return _ExpenseTile(
                                     expense: e,
                                     showDivider: !isLast,
+                                    onEdit: () => _editExpense(e),
+                                    onDelete: () => _deleteExpense(e),
                                   );
                                 },
                               ),
@@ -517,7 +628,10 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                 child: _BottomNav(
                   selectedIndex: _selectedTab,
                   onSelect: (i) {
-                    setState(() => _selectedTab = i);
+                    setState(() {
+                      _selectedTab = i;
+                    });
+
                     if (i == 0) {
                       Navigator.pushReplacement(
                         context,
@@ -549,6 +663,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
 class _CategoryItem {
   final String label;
   final IconData? icon;
+
   const _CategoryItem(this.label, this.icon);
 }
 
@@ -556,12 +671,16 @@ IconData _iconForCategory(String category) {
   switch (category) {
     case 'Food':
       return Icons.restaurant_rounded;
+
     case 'Transport':
       return Icons.directions_bus_filled_rounded;
+
     case 'Shopping':
       return Icons.shopping_bag_rounded;
+
     case 'Bills':
       return Icons.receipt_long_rounded;
+
     default:
       return Icons.more_horiz_rounded;
   }
@@ -582,20 +701,32 @@ String _formatDate(DateTime date) {
     'Nov',
     'Dec',
   ];
+
   return '${date.day} ${months[date.month - 1]} ${date.year}';
 }
 
-/// A single row in the expense history list.
+/// Single expense row.
 class _ExpenseTile extends StatelessWidget {
   final Expense expense;
   final bool showDivider;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const _ExpenseTile({required this.expense, required this.showDivider});
+  const _ExpenseTile({
+    required this.expense,
+    required this.showDivider,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   static const Color coralSoft = _ExpenseHistoryScreenState.coralSoft;
+
   static const Color coral = _ExpenseHistoryScreenState.coral;
+
   static const Color textDark = _ExpenseHistoryScreenState.textDark;
+
   static const Color textGrey = _ExpenseHistoryScreenState.textGrey;
+
   static const Color outline = _ExpenseHistoryScreenState.outline;
 
   @override
@@ -619,7 +750,9 @@ class _ExpenseTile extends StatelessWidget {
                   color: coral,
                 ),
               ),
+
               const SizedBox(width: 14),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -637,22 +770,98 @@ class _ExpenseTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       '${expense.category} · ${_formatDate(expense.date)}',
-                      style: TextStyle(color: textGrey, fontSize: 13),
+                      style: const TextStyle(color: textGrey, fontSize: 13),
                     ),
                   ],
                 ),
               ),
-              Text(
-                'PKR ${expense.amountPkr.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: textDark,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
+
+              // Amount + menu
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'PKR ${expense.amountPkr.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: textDark,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
+                    icon: const Icon(
+                      Icons.more_horiz_rounded,
+                      color: textGrey,
+                      size: 22,
+                    ),
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        onEdit();
+                      } else if (value == 'delete') {
+                        onDelete();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem<String>(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 19,
+                              color: textDark,
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Edit',
+                              style: TextStyle(
+                                color: textDark,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              size: 19,
+                              color: Color(0xFFC9503B),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Delete',
+                              style: TextStyle(
+                                color: Color(0xFFC9503B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
         ),
+
         if (showDivider)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -677,7 +886,9 @@ class _PillButton extends StatelessWidget {
   });
 
   static const Color coral = _ExpenseHistoryScreenState.coral;
+
   static const Color textDark = _ExpenseHistoryScreenState.textDark;
+
   static const Color outline = _ExpenseHistoryScreenState.outline;
 
   @override
@@ -717,7 +928,6 @@ class _PillButton extends StatelessWidget {
   }
 }
 
-/// Category filter chip ("All categories", "Food", "Transport", etc.)
 class _CategoryChip extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -732,7 +942,9 @@ class _CategoryChip extends StatelessWidget {
   });
 
   static const Color textDark = _ExpenseHistoryScreenState.textDark;
+
   static const Color textGrey = _ExpenseHistoryScreenState.textGrey;
+
   static const Color outline = _ExpenseHistoryScreenState.outline;
 
   @override
@@ -772,7 +984,6 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-/// Floating bottom nav: Home / + / History, with History selected here.
 class _BottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
@@ -812,9 +1023,13 @@ class _BottomNav extends StatelessWidget {
             textGrey: textGrey,
             onTap: () => onSelect(0),
           ),
+
           const SizedBox(width: 6),
+
           _NavAddButton(coral: coral, onTap: () => onSelect(1)),
+
           const SizedBox(width: 6),
+
           _NavItem(
             icon: Icons.grid_view_rounded,
             label: 'History',
@@ -880,6 +1095,7 @@ class _NavItem extends StatelessWidget {
 class _NavAddButton extends StatelessWidget {
   final Color coral;
   final VoidCallback onTap;
+
   const _NavAddButton({required this.coral, required this.onTap});
 
   @override
@@ -901,8 +1117,6 @@ class _NavAddButton extends StatelessWidget {
   }
 }
 
-/// Dashed border drawn only on the bottom rounded corners (used where the
-/// empty-state card sits directly under the solid olive total card).
 class _DashedBottomRRectPainter extends CustomPainter {
   final Color color;
   final double radius;
@@ -937,69 +1151,27 @@ class _DashedBottomRRectPainter extends CustomPainter {
     required double gapLength,
   }) {
     final Path dest = Path();
+
     for (final PathMetric metric in source.computeMetrics()) {
       double distance = 0;
       bool draw = true;
+
       while (distance < metric.length) {
         final double next = distance + (draw ? dashLength : gapLength);
+
         if (draw) {
           dest.addPath(
             metric.extractPath(distance, next.clamp(0, metric.length)),
             Offset.zero,
           );
         }
+
         distance = next;
         draw = !draw;
       }
     }
+
     return dest;
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-/// Wallet/card glyph used in the app icon (matches the Khata/Paisa logo mark).
-class _WalletIconPainter extends CustomPainter {
-  final Color color;
-  const _WalletIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint fillPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final RRect walletBody = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      const Radius.circular(4),
-    );
-    final Path walletPath = Path()..addRRect(walletBody);
-
-    final RRect innerCut = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        size.width * 0.14,
-        size.height * 0.16,
-        size.width * 0.72,
-        size.height * 0.68,
-      ),
-      const Radius.circular(2),
-    );
-    final Path innerPath = Path()..addRRect(innerCut);
-
-    final Path combined = Path.combine(
-      PathOperation.difference,
-      walletPath,
-      innerPath,
-    );
-    canvas.drawPath(combined, fillPaint);
-
-    final double circleRadius = size.height * 0.24;
-    final Offset circleCenter = Offset(
-      size.width - circleRadius - size.width * 0.04,
-      size.height / 2,
-    );
-    canvas.drawCircle(circleCenter, circleRadius, fillPaint);
   }
 
   @override

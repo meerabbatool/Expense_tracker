@@ -5,32 +5,48 @@ import 'history_screen.dart';
 import '../expense_store.dart';
 
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({super.key});
+  /// Null = add new expense.
+  ///
+  /// Non-null = edit existing expense.
+  final Expense? expense;
+
+  const AddExpenseScreen({super.key, this.expense});
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
 }
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
-  int _selectedTab = 1; // + (Add expense) active
-  int _selectedCategory = 0; // Food selected by default
+  int _selectedTab = 1;
+
+  int _selectedCategory = 0;
 
   final TextEditingController _titleController = TextEditingController();
+
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _dateController = TextEditingController(
-    text: '09/17/2026',
-  );
+
+  final TextEditingController _dateController = TextEditingController();
+
   final TextEditingController _notesController = TextEditingController();
 
   static const Color bg = Color(0xFFF7F1E7);
+
   static const Color cardBg = Color(0xFFFBF7EF);
+
   static const Color coral = Color(0xFFC97B5B);
+
   static const Color textDark = Color(0xFF1E1B18);
+
   static const Color textGrey = Color(0xFF7A756E);
+
   static const Color outline = Color(0xFFD9CFBE);
+
   static const Color required = Color(0xFFC9503B);
+
   static const Color previewChip = Color(0xFFF0E9DC);
+
   static const Color tipGreen = Color(0xFF6E7B3E);
+
   static const Color disabledSave = Color(0xFFDCD6C8);
 
   final List<_CategoryItem> _categories = const [
@@ -41,37 +57,81 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     _CategoryItem('Other', Icons.more_horiz_rounded),
   ];
 
+  bool get _isEditing => widget.expense != null;
+
   @override
   void initState() {
     super.initState();
-    // Rebuild whenever the required fields change so the Save button
-    // enables/disables and the preview updates live.
-    _titleController.addListener(() => setState(() {}));
-    _amountController.addListener(() => setState(() {}));
+
+    final Expense? existingExpense = widget.expense;
+
+    if (existingExpense != null) {
+      _titleController.text = existingExpense.title;
+
+      _amountController.text = existingExpense.amountPkr.toStringAsFixed(2);
+
+      _dateController.text = _formatDateForField(existingExpense.date);
+
+      _notesController.text = existingExpense.notes;
+
+      final int categoryIndex = _categories.indexWhere(
+        (category) => category.label == existingExpense.category,
+      );
+
+      if (categoryIndex >= 0) {
+        _selectedCategory = categoryIndex;
+      }
+    } else {
+      _dateController.text = _formatDateForField(DateTime.now());
+    }
+
+    _titleController.addListener(_onFormChanged);
+
+    _amountController.addListener(_onFormChanged);
+
+    _notesController.addListener(_onFormChanged);
+  }
+
+  void _onFormChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   bool get _isFormValid {
     final String title = _titleController.text.trim();
+
     final double? amount = double.tryParse(_amountController.text.trim());
+
     return title.isNotEmpty && amount != null && amount > 0;
   }
 
   String _twoDigits(int n) => n.toString().padLeft(2, '0');
 
+  String _formatDateForField(DateTime date) {
+    return '${_twoDigits(date.month)}/${_twoDigits(date.day)}/${date.year}';
+  }
+
   Future<void> _pickDate() async {
     final DateTime today = DateTime.now();
 
-    // Parse whatever is currently in the field so the picker opens on the
-    // right date; fall back to today if it doesn't parse.
     DateTime initial = today;
+
     final parts = _dateController.text.trim().split('/');
+
     if (parts.length == 3) {
       final month = int.tryParse(parts[0]);
+
       final day = int.tryParse(parts[1]);
+
       final year = int.tryParse(parts[2]);
+
       if (month != null && day != null && year != null) {
         final candidate = DateTime(year, month, day);
-        if (!candidate.isAfter(today)) initial = candidate;
+
+        if (!candidate.isAfter(today)) {
+          initial = candidate;
+        }
       }
     }
 
@@ -79,7 +139,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       context: context,
       initialDate: initial,
       firstDate: DateTime(2000),
-      lastDate: today, // future dates are blocked, as the hint text says
+      lastDate: today,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -96,48 +156,109 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     if (picked != null) {
       setState(() {
-        _dateController.text =
-            '${_twoDigits(picked.month)}/${_twoDigits(picked.day)}/${picked.year}';
+        _dateController.text = _formatDateForField(picked);
       });
     }
   }
 
-  void _saveExpense() {
-    final double amount = double.tryParse(_amountController.text.trim()) ?? 0;
-
-    // The date field is displayed as MM/DD/YYYY — parse it defensively and
-    // fall back to today if the user's typed text doesn't parse.
-    DateTime parsedDate;
+  DateTime _parseDate() {
     final parts = _dateController.text.trim().split('/');
+
     if (parts.length == 3) {
       final month = int.tryParse(parts[0]);
+
       final day = int.tryParse(parts[1]);
+
       final year = int.tryParse(parts[2]);
-      parsedDate = (month != null && day != null && year != null)
-          ? DateTime(year, month, day)
-          : DateTime.now();
-    } else {
-      parsedDate = DateTime.now();
+
+      if (month != null && day != null && year != null) {
+        final DateTime date = DateTime(year, month, day);
+
+        return date;
+      }
     }
 
+    return DateTime.now();
+  }
+
+  void _saveExpense() {
+    if (!_isFormValid) return;
+
+    final double amount = double.tryParse(_amountController.text.trim()) ?? 0;
+
+    final DateTime parsedDate = _parseDate();
+
+    final String title = _titleController.text.trim();
+
+    final String notes = _notesController.text.trim();
+
+    final String category = _categories[_selectedCategory].label;
+
+    // ------------------------------------------------
+    // EDIT EXISTING EXPENSE
+    // ------------------------------------------------
+    if (_isEditing) {
+      final Expense oldExpense = widget.expense!;
+
+      final Expense updatedExpense = Expense(
+        id: oldExpense.id,
+        title: title,
+        amountPkr: amount,
+        category: category,
+        date: parsedDate,
+        notes: notes,
+      );
+
+      ExpenseStore.instance.update(updatedExpense);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"$title" updated.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      Navigator.pop(context);
+
+      return;
+    }
+
+    // ------------------------------------------------
+    // ADD NEW EXPENSE
+    // ------------------------------------------------
     ExpenseStore.instance.add(
       Expense(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
-        title: _titleController.text.trim(),
+        title: title,
         amountPkr: amount,
-        category: _categories[_selectedCategory].label,
+        category: category,
         date: parsedDate,
-        notes: _notesController.text.trim(),
+        notes: notes,
       ),
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('"${_titleController.text.trim()}" saved.')),
+      SnackBar(
+        content: Text('"$title" saved.'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const PaisaDashboardScreen()),
     );
+  }
+
+  void _cancel() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const PaisaDashboardScreen()),
+      );
+    }
   }
 
   @override
@@ -146,6 +267,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     _amountController.dispose();
     _dateController.dispose();
     _notesController.dispose();
+
     super.dispose();
   }
 
@@ -169,18 +291,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: () {
-                            if (Navigator.canPop(context)) {
-                              Navigator.pop(context);
-                            } else {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const PaisaDashboardScreen(),
-                                ),
-                              );
-                            }
-                          },
+                          onTap: _cancel,
                           child: Container(
                             width: 44,
                             height: 44,
@@ -197,7 +308,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           ),
                         ),
                       ),
+
                       const SizedBox(width: 12),
+
                       const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -216,7 +329,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           ),
                         ],
                       ),
+
                       const Spacer(),
+
                       _PillButton(
                         label: 'Add expense',
                         icon: Icons.add,
@@ -225,30 +340,36 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 24),
+
                   Divider(color: outline.withOpacity(0.6), height: 1),
+
                   const SizedBox(height: 24),
 
                   // ---- Heading ----
-                  const Column(
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Add expense',
-                        style: TextStyle(
+                        _isEditing ? 'Edit expense' : 'Add expense',
+                        style: const TextStyle(
                           color: textDark,
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
                           fontFamily: 'serif',
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'Fill in the details below — it takes about ten seconds.',
-                        style: TextStyle(color: textGrey, fontSize: 14),
+                        _isEditing
+                            ? 'Update the details of this expense.'
+                            : 'Fill in the details below — it takes about ten seconds.',
+                        style: const TextStyle(color: textGrey, fontSize: 14),
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 24),
 
                   // ---- Form card ----
@@ -262,23 +383,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Title field
-                        _FieldLabel(text: 'Title', required: true),
+                        // Title
+                        const _FieldLabel(text: 'Title', required: true),
+
                         const SizedBox(height: 8),
+
                         _InputBox(
                           controller: _titleController,
                           hint: 'e.g. Weekly grocery run',
                         ),
+
                         const SizedBox(height: 6),
-                        Text(
+
+                        const Text(
                           'What was this expense for?',
                           style: TextStyle(color: textGrey, fontSize: 12.5),
                         ),
+
                         const SizedBox(height: 20),
 
-                        // Amount field
-                        _FieldLabel(text: 'Amount', required: true),
+                        // Amount
+                        const _FieldLabel(text: 'Amount', required: true),
+
                         const SizedBox(height: 8),
+
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
@@ -288,7 +416,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           ),
                           child: Row(
                             children: [
-                              Text(
+                              const Text(
                                 'PKR',
                                 style: TextStyle(color: textGrey, fontSize: 15),
                               ),
@@ -312,36 +440,49 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             ],
                           ),
                         ),
+
                         const SizedBox(height: 6),
-                        Text(
+
+                        const Text(
                           'In PKR, up to 2 decimal places.',
                           style: TextStyle(color: textGrey, fontSize: 12.5),
                         ),
+
                         const SizedBox(height: 22),
 
                         // Category
-                        _FieldLabel(text: 'Category', required: true),
+                        const _FieldLabel(text: 'Category', required: true),
+
                         const SizedBox(height: 10),
+
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
                           children: List.generate(_categories.length, (i) {
                             final cat = _categories[i];
+
                             final bool selected = _selectedCategory == i;
+
                             return _CategoryChip(
                               label: cat.label,
                               icon: cat.icon,
                               selected: selected,
-                              onTap: () =>
-                                  setState(() => _selectedCategory = i),
+                              onTap: () {
+                                setState(() {
+                                  _selectedCategory = i;
+                                });
+                              },
                             );
                           }),
                         ),
+
                         const SizedBox(height: 22),
 
                         // Date
-                        _FieldLabel(text: 'Date', required: true),
+                        const _FieldLabel(text: 'Date', required: true),
+
                         const SizedBox(height: 8),
+
                         Material(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(30),
@@ -360,9 +501,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                 children: [
                                   Expanded(
                                     child: IgnorePointer(
-                                      // The text field only displays the date;
-                                      // tapping anywhere opens the picker instead
-                                      // of the on-screen keyboard.
                                       child: TextField(
                                         controller: _dateController,
                                         decoration: const InputDecoration(
@@ -371,7 +509,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                       ),
                                     ),
                                   ),
-                                  Icon(
+                                  const Icon(
                                     Icons.calendar_today_outlined,
                                     color: textGrey,
                                     size: 18,
@@ -381,25 +519,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 6),
-                        Text(
+
+                        const Text(
                           'Today or earlier — future dates are blocked.',
                           style: TextStyle(color: textGrey, fontSize: 12.5),
                         ),
+
                         const SizedBox(height: 22),
 
                         // Notes
                         Row(
                           children: [
-                            _FieldLabel(text: 'Notes', required: false),
+                            const _FieldLabel(text: 'Notes', required: false),
                             const SizedBox(width: 6),
-                            Text(
+                            const Text(
                               '(optional)',
                               style: TextStyle(color: textGrey, fontSize: 13),
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 8),
+
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.white,
@@ -431,50 +574,51 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             ),
                           ),
                         ),
+
                         Align(
                           alignment: Alignment.centerRight,
                           child: Text(
-                            '0/500',
-                            style: TextStyle(color: textGrey, fontSize: 12),
+                            '${_notesController.text.length}/500',
+                            style: const TextStyle(
+                              color: textGrey,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
+
                         const SizedBox(height: 10),
+
                         Divider(color: outline.withOpacity(0.6), height: 1),
+
                         const SizedBox(height: 16),
 
-                        // Cancel / Save row
+                        // Cancel / Save
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             _PillButton(
                               label: 'Cancel',
                               filled: false,
-                              onTap: () {
-                                if (Navigator.canPop(context)) {
-                                  Navigator.pop(context);
-                                } else {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const PaisaDashboardScreen(),
-                                    ),
-                                  );
-                                }
-                              },
+                              onTap: _cancel,
                             ),
+
                             const SizedBox(width: 10),
+
                             _PillButton(
-                              label: 'Save expense',
+                              label: _isEditing
+                                  ? 'Update expense'
+                                  : 'Save expense',
                               filled: true,
                               disabled: !_isFormValid,
                               onTap: _isFormValid ? _saveExpense : () {},
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 14),
+
                         if (!_isFormValid)
-                          Row(
+                          const Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(
@@ -482,7 +626,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                 size: 16,
                                 color: textGrey,
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   'Add a title, a amount to save this expense.',
@@ -497,6 +641,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 18),
 
                   // ---- Preview card ----
@@ -510,7 +655,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'PREVIEW',
                           style: TextStyle(
                             color: textGrey,
@@ -519,7 +664,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             letterSpacing: 1.5,
                           ),
                         ),
+
                         const SizedBox(height: 8),
+
                         Text(
                           'PKR ${(double.tryParse(_amountController.text.trim()) ?? 0).toStringAsFixed(2)}',
                           style: const TextStyle(
@@ -529,12 +676,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             fontFamily: 'serif',
                           ),
                         ),
+
                         const SizedBox(height: 6),
+
                         Text(
-                          '${_titleController.text.trim().isEmpty ? 'Untitled expense' : _titleController.text.trim()} · 17 Sep 2026',
-                          style: TextStyle(color: textGrey, fontSize: 14),
+                          '${_titleController.text.trim().isEmpty ? 'Untitled expense' : _titleController.text.trim()} · ${_formatDateForPreview()}',
+                          style: const TextStyle(color: textGrey, fontSize: 14),
                         ),
+
                         const SizedBox(height: 16),
+
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(
@@ -555,12 +706,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: RichText(
-                                  text: TextSpan(
+                                  text: const TextSpan(
                                     style: TextStyle(
-                                      color: textDark.withOpacity(0.85),
+                                      color: textDark,
                                       fontSize: 13.5,
                                     ),
-                                    children: const [
+                                    children: [
                                       TextSpan(text: 'Stored as '),
                                       TextSpan(
                                         text: '0 paisa',
@@ -582,9 +733,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 18),
 
-                  // ---- Quick tips card ----
+                  // ---- Quick tips ----
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(22),
@@ -597,7 +749,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       children: [
                         Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.lightbulb_outline_rounded,
                               color: tipGreen,
                               size: 20,
@@ -613,18 +765,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 14),
-                        _TipBullet(
+
+                        const _TipBullet(
                           text:
                               'Keep titles short so search stays quick later on.',
                         ),
+
                         const SizedBox(height: 10),
-                        _TipBullet(
+
+                        const _TipBullet(
                           text:
                               'Use Bills for rent, utilities and subscriptions.',
                         ),
+
                         const SizedBox(height: 10),
-                        _TipBullet(
+
+                        const _TipBullet(
                           text:
                               'Everything saves to this device automatically.',
                         ),
@@ -635,7 +793,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
             ),
 
-            // ---- Floating bottom nav ----
+            // ---- Bottom navigation ----
             Positioned(
               left: 0,
               right: 0,
@@ -644,7 +802,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 child: _BottomNav(
                   selectedIndex: _selectedTab,
                   onSelect: (i) {
-                    setState(() => _selectedTab = i);
+                    setState(() {
+                      _selectedTab = i;
+                    });
+
                     if (i == 0) {
                       Navigator.pushReplacement(
                         context,
@@ -671,17 +832,40 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       ),
     );
   }
+
+  String _formatDateForPreview() {
+    final DateTime date = _parseDate();
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
 }
 
 class _CategoryItem {
   final String label;
   final IconData icon;
+
   const _CategoryItem(this.label, this.icon);
 }
 
 class _FieldLabel extends StatelessWidget {
   final String text;
   final bool required;
+
   const _FieldLabel({required this.text, required this.required});
 
   @override
@@ -709,9 +893,11 @@ class _FieldLabel extends StatelessWidget {
 class _InputBox extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
+
   const _InputBox({required this.controller, required this.hint});
 
   static const Color outline = _AddExpenseScreenState.outline;
+
   static const Color textGrey = _AddExpenseScreenState.textGrey;
 
   @override
@@ -737,6 +923,7 @@ class _InputBox extends StatelessWidget {
 
 class _TipBullet extends StatelessWidget {
   final String text;
+
   const _TipBullet({required this.text});
 
   @override
@@ -785,9 +972,13 @@ class _PillButton extends StatelessWidget {
   });
 
   static const Color coral = _AddExpenseScreenState.coral;
+
   static const Color textDark = _AddExpenseScreenState.textDark;
+
   static const Color outline = _AddExpenseScreenState.outline;
+
   static const Color disabledSave = _AddExpenseScreenState.disabledSave;
+
   static const Color textGrey = _AddExpenseScreenState.textGrey;
 
   @override
@@ -795,6 +986,7 @@ class _PillButton extends StatelessWidget {
     final Color bgColor = disabled
         ? disabledSave
         : (filled ? coral : Colors.white);
+
     final Color fgColor = disabled
         ? textGrey
         : (filled ? Colors.white : textDark);
@@ -834,7 +1026,6 @@ class _PillButton extends StatelessWidget {
   }
 }
 
-/// Category filter chip ("Food", "Transport", etc.)
 class _CategoryChip extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -849,8 +1040,11 @@ class _CategoryChip extends StatelessWidget {
   });
 
   static const Color coral = _AddExpenseScreenState.coral;
+
   static const Color textDark = _AddExpenseScreenState.textDark;
+
   static const Color textGrey = _AddExpenseScreenState.textGrey;
+
   static const Color outline = _AddExpenseScreenState.outline;
 
   @override
@@ -888,7 +1082,6 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-/// Floating bottom nav: Home / + / History, with + (Add) selected here.
 class _BottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
@@ -928,9 +1121,13 @@ class _BottomNav extends StatelessWidget {
             textGrey: textGrey,
             onTap: () => onSelect(0),
           ),
+
           const SizedBox(width: 6),
+
           _NavAddButton(coral: coral, onTap: () => onSelect(1)),
+
           const SizedBox(width: 6),
+
           _NavItem(
             icon: Icons.grid_view_rounded,
             label: 'History',
@@ -996,6 +1193,7 @@ class _NavItem extends StatelessWidget {
 class _NavAddButton extends StatelessWidget {
   final Color coral;
   final VoidCallback onTap;
+
   const _NavAddButton({required this.coral, required this.onTap});
 
   @override
@@ -1015,51 +1213,4 @@ class _NavAddButton extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Wallet/card glyph used in the app icon (matches the Khata/Paisa logo mark).
-class _WalletIconPainter extends CustomPainter {
-  final Color color;
-  const _WalletIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint fillPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final RRect walletBody = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      const Radius.circular(4),
-    );
-    final Path walletPath = Path()..addRRect(walletBody);
-
-    final RRect innerCut = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        size.width * 0.14,
-        size.height * 0.16,
-        size.width * 0.72,
-        size.height * 0.68,
-      ),
-      const Radius.circular(2),
-    );
-    final Path innerPath = Path()..addRRect(innerCut);
-
-    final Path combined = Path.combine(
-      PathOperation.difference,
-      walletPath,
-      innerPath,
-    );
-    canvas.drawPath(combined, fillPaint);
-
-    final double circleRadius = size.height * 0.24;
-    final Offset circleCenter = Offset(
-      size.width - circleRadius - size.width * 0.04,
-      size.height / 2,
-    );
-    canvas.drawCircle(circleCenter, circleRadius, fillPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
